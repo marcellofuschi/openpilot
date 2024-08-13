@@ -289,7 +289,9 @@ jobs:
           ref: ${{ github.event.pull_request.base.ref }}
       - uses: ./.github/workflows/setup-with-retry
       - name: Get base car docs
-        run: ${{ env.RUN }} "cp docs/CARS.md /tmp/openpilot_cache/base_CARS.md"
+        run: |
+          ${{ env.RUN }} "cp docs/CARS.md /tmp/openpilot_cache/base_CARS.md"
+          sudo chown -R $USER:$USER ${{ github.workspace }}
       - uses: actions/checkout@v4
         with:
           submodules: true
