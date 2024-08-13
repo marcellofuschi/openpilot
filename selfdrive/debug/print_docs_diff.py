@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import argparse
-import requests
 import re
+from openpilot.common.basedir import BASEDIR
 
 ARROW_SYMBOL = "➡️"
 
@@ -11,15 +11,15 @@ def get_cars_docs_in_markdown(docs_content):
     lines = md_table.strip().split('\n')
     headers = [h.strip() for h in lines[0].split('|') if h]
     assert len(headers) == len(set(headers)), 'Duplicate headers found in the markdown table'
-    return headers, [dict(zip(headers, [cell.strip() for cell in line.split('|')[1:-1]])) for line in lines[2:]]
+    return headers, [dict(zip(headers, [cell.strip() for cell in line.split('|')[1:-1]], strict=True)) for line in lines[2:]]
 
   match = re.search(r"(\d+)\s+supported\s+cars\s*\n([\s\S]*?\|.*?\|[\s\S]*?\|[-:]+\|[\s\S]*?\n(?:[^\S\r\n]*\S.*\n)*\n?)", docs_content, re.IGNORECASE)
   if not match:
     raise RuntimeError("Couldn't find the car docs Markdown table.")
-  num_cars = int(match.group(1))
-  md_table = match.group(2).strip()
+  num_cars, md_table = match.groups()
+  num_cars = int(num_cars)
   headers, results = _parse_markdown_table(md_table)
-  results = {f'{r['Make']} {r['Model']}': r for r in results}
+  results = {f"{r['Make']} {r['Model']}": r for r in results}
   assert len(results) == num_cars
   return headers, results
 
@@ -53,10 +53,11 @@ def build_row(headers, base_car, new_car=None):
   return "|" + "|".join(row_builder) + "|"
 
 
-def print_car_docs_diff(new_docs_path):
-  base_docs_content = requests.get("https://raw.githubusercontent.com/commaai/openpilot/master/docs/CARS.md").text
+def print_car_docs_diff(base_docs_path):
+  with open(base_docs_path) as base_docs_file:
+    base_docs_content = base_docs_file.read()
 
-  with open(new_docs_path) as new_docs_file:
+  with open(BASEDIR + '/docs/CARS.md') as new_docs_file:
     new_docs_content = new_docs_file.read()
 
   base_headers, base_cars = get_cars_docs_in_markdown(base_docs_content)
@@ -74,7 +75,7 @@ def print_car_docs_diff(new_docs_path):
 
     for title, category in (("## 🔀 Column Changes", "column"), ("## ❌ Removed", "removals"), ("## ➕ Added", "additions")):
       ordered_headers = base_headers if category != 'additions' else new_headers
-      if len(changes[category]):
+      if changes[category]:
         markdown_builder.append(title)
         markdown_builder.append("|" + "|".join(ordered_headers) + "|")
         markdown_builder.append("|---|---|---|{}|".format("|".join([":---:"] * (len(ordered_headers) - 3))))
@@ -85,6 +86,6 @@ def print_car_docs_diff(new_docs_path):
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
-  parser.add_argument("--new-docs-path", required=True)
+  parser.add_argument("--base-docs-path", required=True)
   args = parser.parse_args()
-  print_car_docs_diff(args.new_docs_path)
+  print_car_docs_diff(args.base_docs_path)
